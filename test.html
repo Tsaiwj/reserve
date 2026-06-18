@@ -344,7 +344,7 @@
   </main>
 
   <script>
-    const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwj4UuZ_kJkMtqSW6cdt5XUCpD5F0BG1MBjREsyDDjnb9xwKFi42PhL_iyKyw0TQVzuCQ/exec';
+    const SCRIPT_URL = '';
     const LIFF_ID = '2010318197-3zqjPH9v';
 
     const icons = {
@@ -381,6 +381,8 @@
       lineDisplayName: '',
       linePictureUrl: ''
     };
+    let lastQueryResults = [];
+    let demoCanceledBookingIds = new Set();
 
     document.addEventListener('DOMContentLoaded', async () => {
       await initLiff();
@@ -692,10 +694,13 @@
               serviceName: '深度放鬆薰衣草全身按摩',
               date: availableDays[1].fullDate,
               time: '02:30 PM',
-              status: '已預約',
+              status: demoCanceledBookingIds.has('DEMO001') ? '已取消' : '已預約',
               preferredOil: '薰衣草 (Lavender) - 舒緩放鬆、助眠',
               notes: '希望加強肩頸按摩',
-              bookingId: 'DEMO001'
+              bookingId: 'DEMO001',
+              name: '測試客人',
+              phone: '0912345678',
+              canceledAt: demoCanceledBookingIds.has('DEMO001') ? '剛剛' : ''
             }
           ];
         } else {
@@ -727,8 +732,60 @@
       }
     }
 
+    async function cancelBooking(bookingId) {
+      const booking = lastQueryResults.find(item => String(item.bookingId || '') === String(bookingId || ''));
+
+      if (!booking) {
+        return showToast('找不到這筆預約資料');
+      }
+
+      if ((booking.status || '已預約') === '已取消') {
+        return showToast('這筆預約已經取消');
+      }
+
+      const confirmed = window.confirm(`確定要取消 ${booking.date || ''} ${booking.time || ''} 的預約嗎？`);
+      if (!confirmed) return;
+
+      try {
+        if (!SCRIPT_URL) {
+          demoCanceledBookingIds.add(String(bookingId));
+          booking.status = '已取消';
+          booking.canceledAt = '剛剛';
+          showToast('預約已取消', 'success');
+          renderQueryResults(lastQueryResults);
+          return;
+        }
+
+        const response = await fetch(SCRIPT_URL, {
+          method: 'POST',
+          body: JSON.stringify({
+            action: 'cancelBooking',
+            bookingId: bookingId,
+            lineUserId: lineProfile.lineUserId,
+            name: booking.name || document.getElementById('query-name').value.trim(),
+            phone: booking.phone || document.getElementById('query-phone').value.trim()
+          }),
+          headers: {
+            'Content-Type': 'text/plain;charset=utf-8'
+          }
+        });
+
+        const data = await response.json();
+        if (!data.ok) {
+          return showToast(data.message || '取消預約失敗');
+        }
+
+        showToast('預約已取消', 'success');
+        await queryMyBookings();
+      } catch (error) {
+        console.error(error);
+        showToast('取消預約失敗，請稍後再試');
+      }
+    }
+
     function renderQueryResults(bookings) {
       const result = document.getElementById('query-result');
+      lastQueryResults = bookings;
 
       if (!bookings.length) {
         result.innerHTML = `
@@ -739,24 +796,47 @@
         return;
       }
 
-      result.innerHTML = bookings.map(booking => `
-        <div class="border border-emerald-100 bg-emerald-50/50 rounded-2xl p-5">
+      result.innerHTML = bookings.map(booking => {
+        const status = booking.status || '已預約';
+        const isCanceled = status === '已取消';
+        const bookingId = safeBookingId(booking.bookingId);
+        const cardClass = isCanceled
+          ? 'border-stone-200 bg-stone-50'
+          : 'border-emerald-100 bg-emerald-50/50';
+        const statusClass = isCanceled
+          ? 'bg-white text-stone-500 border-stone-200'
+          : 'bg-white text-emerald-700 border-emerald-200';
+        const cancelButton = isCanceled ? '' : `
+          <button onclick="cancelBooking('${bookingId}')" class="mt-4 w-full sm:w-auto bg-white border-2 border-rose-200 text-rose-600 hover:bg-rose-50 font-semibold py-2.5 px-5 rounded-xl transition-all duration-300">
+            取消預約
+          </button>
+        `;
+
+        return `
+        <div class="border ${cardClass} rounded-2xl p-5">
           <div class="flex items-start justify-between gap-4 mb-4">
             <div>
               <h3 class="font-bold text-stone-800">${booking.serviceName || ''}</h3>
               <p class="text-sm text-stone-500 mt-1">${booking.date || ''} ${booking.time || ''}</p>
               <p class="text-xs text-stone-400 mt-1">預約編號：${booking.bookingId || '未提供'}</p>
             </div>
-            <span class="shrink-0 bg-white text-emerald-700 border border-emerald-200 rounded-full px-3 py-1 text-xs font-semibold">
-              ${booking.status || '已預約'}
+            <span class="shrink-0 border ${statusClass} rounded-full px-3 py-1 text-xs font-semibold">
+              ${status}
             </span>
           </div>
           <div class="text-sm text-stone-600 space-y-1">
             <p><span class="text-stone-400">精油偏好：</span>${booking.preferredOil || '未填寫'}</p>
             <p><span class="text-stone-400">備註：</span>${booking.notes || '無'}</p>
+            ${isCanceled ? `<p><span class="text-stone-400">取消時間：</span>${booking.canceledAt || '已取消'}</p>` : ''}
           </div>
+          ${cancelButton}
         </div>
-      `).join('');
+        `;
+      }).join('');
+    }
+
+    function safeBookingId(value) {
+      return String(value || '').replace(/[^A-Za-z0-9_-]/g, '');
     }
 
     function updateUI() {
@@ -945,3 +1025,4 @@
   </script>
 </body>
 </html>
+
