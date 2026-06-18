@@ -1,0 +1,947 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Aura Spa 精油預約系統</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+  <style>
+    .hide-scrollbar::-webkit-scrollbar { display: none; }
+    .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+    @keyframes slideUp {
+      from { transform: translateY(100%); opacity: 0; }
+      to { transform: translateY(0); opacity: 1; }
+    }
+    .animate-slide-up { animation: slideUp 0.3s ease-out forwards; }
+
+    @keyframes fadeIn {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+    .animate-fade-in { animation: fadeIn 0.35s ease-out forwards; }
+
+    .view-container,
+    .step-container {
+      display: none;
+    }
+
+    .view-container.active,
+    .step-container.active {
+      display: block;
+    }
+  </style>
+</head>
+<body class="min-h-screen bg-stone-50 text-stone-800 font-sans selection:bg-emerald-200 selection:text-emerald-900 pb-12">
+  <div id="toast-container" class="fixed top-6 left-1/2 -translate-x-1/2 z-50"></div>
+
+  <header class="bg-white/80 backdrop-blur-md sticky top-0 z-40 border-b border-stone-200 shadow-sm">
+    <div class="max-w-4xl mx-auto px-6 py-4 flex justify-between items-center">
+      <button onclick="showHome()" class="flex items-center gap-2 text-left">
+        <div class="w-10 h-10 bg-emerald-700 rounded-full flex items-center justify-center text-white shadow-md">
+          <svg class="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M11 20A7 7 0 0 1 9.8 6.1C15.5 5 17 4.48 19 2c1 2 2 4.18 2 8 0 5.5-4.78 10-10 10Z" />
+            <path d="M2 21c0-3 1.85-5.36 5.08-6C9.5 14.52 12 13 13 12" />
+          </svg>
+        </div>
+        <div>
+          <h1 class="text-xl font-bold tracking-wider text-emerald-900">Aura Spa</h1>
+          <p class="text-xs text-stone-500 tracking-widest uppercase">Aromatherapy & Wellness</p>
+        </div>
+      </button>
+
+      <button id="header-back-btn" onclick="handleBack()" class="hidden items-center gap-1 text-sm font-medium text-stone-500 hover:text-emerald-700 transition-colors">
+        <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="15 18 9 12 15 6" />
+        </svg>
+        返回
+      </button>
+    </div>
+  </header>
+
+  <main class="max-w-3xl mx-auto px-4 sm:px-6 mt-8 animate-fade-in">
+    <section id="view-home" class="view-container active">
+      <div class="text-center mb-8">
+        <h2 class="text-2xl sm:text-3xl font-bold text-stone-800 mb-3">Aura Spa 線上服務</h2>
+        <p class="text-stone-500">預約療程，或查詢您已建立的預約紀錄。</p>
+        <p id="line-status" class="mt-3 text-xs text-stone-400">正在讀取 LINE 身份...</p>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+        <button onclick="showBookingFlow()" class="group text-left bg-white border-2 border-transparent hover:border-emerald-300 p-6 rounded-3xl shadow-sm hover:shadow-md transition-all duration-300">
+          <div class="w-12 h-12 rounded-2xl bg-emerald-100 text-emerald-700 flex items-center justify-center mb-5">
+            <svg class="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+              <line x1="16" y1="2" x2="16" y2="6" />
+              <line x1="8" y1="2" x2="8" y2="6" />
+              <line x1="3" y1="10" x2="21" y2="10" />
+            </svg>
+          </div>
+          <h3 class="text-xl font-bold text-stone-800 mb-2">立即預約</h3>
+          <p class="text-sm text-stone-500 leading-relaxed mb-5">選擇療程、日期與時間，留下聯絡資料後完成預約。</p>
+          <div class="flex items-center text-emerald-700 font-semibold">
+            開始預約
+            <svg class="w-5 h-5 ml-2 group-hover:translate-x-1 transition-transform" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="9 18 15 12 9 6" />
+            </svg>
+          </div>
+        </button>
+
+        <button onclick="showQueryFlow()" class="group text-left bg-white border-2 border-transparent hover:border-stone-300 p-6 rounded-3xl shadow-sm hover:shadow-md transition-all duration-300">
+          <div class="w-12 h-12 rounded-2xl bg-stone-100 text-stone-700 flex items-center justify-center mb-5">
+            <svg class="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="11" cy="11" r="8" />
+              <path d="m21 21-4.3-4.3" />
+            </svg>
+          </div>
+          <h3 class="text-xl font-bold text-stone-800 mb-2">查詢我的預約</h3>
+          <p class="text-sm text-stone-500 leading-relaxed mb-5">使用預約時填寫的姓名與手機，查看目前的預約紀錄。</p>
+          <div class="flex items-center text-stone-700 font-semibold">
+            查詢紀錄
+            <svg class="w-5 h-5 ml-2 group-hover:translate-x-1 transition-transform" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="9 18 15 12 9 6" />
+            </svg>
+          </div>
+        </button>
+      </div>
+    </section>
+
+    <section id="view-booking" class="view-container">
+      <div id="progress-section" class="mb-10 bg-white p-6 rounded-3xl shadow-sm border border-stone-100">
+        <div class="flex justify-between items-center mb-6 relative px-2">
+          <div class="absolute left-0 top-1/2 -translate-y-1/2 w-full h-1 bg-stone-100 -z-10 rounded-full"></div>
+          <div id="progress-bar" class="absolute left-0 top-1/2 -translate-y-1/2 h-1 bg-emerald-600 -z-10 rounded-full transition-all duration-500 ease-out" style="width: 0%;"></div>
+          <div id="step-indicator-1" class="w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm transition-all duration-500 bg-emerald-600 text-white shadow-md ring-4 ring-emerald-50">1</div>
+          <div id="step-indicator-2" class="w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm transition-all duration-500 bg-white text-stone-400 border-2 border-stone-200">2</div>
+          <div id="step-indicator-3" class="w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm transition-all duration-500 bg-white text-stone-400 border-2 border-stone-200">3</div>
+          <div id="step-indicator-4" class="w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm transition-all duration-500 bg-white text-stone-400 border-2 border-stone-200">4</div>
+        </div>
+        <div class="flex justify-between text-xs sm:text-sm font-medium text-stone-400">
+          <span id="step-text-1" class="text-center w-20 -ml-5 text-emerald-800">選擇療程</span>
+          <span id="step-text-2" class="text-center w-20">預約時間</span>
+          <span id="step-text-3" class="text-center w-20">填寫資料</span>
+          <span id="step-text-4" class="text-center w-20 -mr-5">確認送出</span>
+        </div>
+      </div>
+
+      <div id="step-1" class="step-container active animate-fade-in">
+        <div class="text-center mb-8">
+          <h2 class="text-2xl sm:text-3xl font-bold text-stone-800 mb-3">請選擇您的專屬療程</h2>
+          <p class="text-stone-500">聆聽身體的需求，為自己挑選一段靜謐的放鬆時光。</p>
+        </div>
+        <div id="services-container" class="grid grid-cols-1 md:grid-cols-2 gap-4"></div>
+      </div>
+
+      <div id="step-2" class="step-container animate-fade-in bg-white p-6 sm:p-8 rounded-3xl shadow-sm border border-stone-100">
+        <div class="mb-2">
+          <h2 class="text-2xl font-bold text-stone-800 mb-2">預約日期與時間</h2>
+          <p class="text-stone-500 text-sm">請選擇您方便前來的日期與時段。</p>
+        </div>
+
+        <div class="flex items-center gap-4 p-4 bg-stone-50 rounded-2xl border border-stone-200 mb-8">
+          <div id="summary-icon-container" class="p-2 rounded-xl"></div>
+          <div>
+            <p class="text-xs text-stone-500">已選擇療程</p>
+            <p class="font-semibold text-stone-800"><span id="summary-service-name"></span> <span class="text-stone-400 font-normal" id="summary-service-duration"></span></p>
+          </div>
+        </div>
+
+        <div>
+          <div class="flex items-center gap-2 mb-4 text-stone-700 font-medium">
+            <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+              <line x1="16" y1="2" x2="16" y2="6" />
+              <line x1="8" y1="2" x2="8" y2="6" />
+              <line x1="3" y1="10" x2="21" y2="10" />
+            </svg>
+            <h3>選擇日期</h3>
+          </div>
+          <div id="dates-container" class="flex overflow-x-auto gap-3 pb-4 snap-x hide-scrollbar scroll-smooth"></div>
+        </div>
+
+        <div id="time-section" class="transition-opacity duration-300 opacity-40 pointer-events-none mt-6">
+          <div class="flex items-center gap-2 mb-4 text-stone-700 font-medium">
+            <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="10" />
+              <polyline points="12 6 12 12 16 14" />
+            </svg>
+            <h3>選擇時段</h3>
+          </div>
+          <div id="times-container" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3"></div>
+        </div>
+      </div>
+
+      <div id="step-3" class="step-container bg-white p-6 sm:p-8 rounded-3xl shadow-sm border border-stone-100 animate-fade-in">
+        <div class="mb-8">
+          <h2 class="text-2xl font-bold text-stone-800 mb-2">聯絡資料與綁定</h2>
+          <p class="text-stone-500 text-sm">完成預約後，可用姓名與手機查詢自己的預約紀錄。</p>
+        </div>
+
+        <div class="space-y-6">
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div class="space-y-2">
+              <label class="text-sm font-medium text-stone-700">真實姓名 <span class="text-rose-500">*</span></label>
+              <input type="text" id="input-name" placeholder="例如：林語堂" class="w-full px-4 py-3 rounded-xl border border-stone-200 bg-stone-50 focus:bg-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all outline-none" />
+            </div>
+            <div class="space-y-2">
+              <label class="text-sm font-medium text-stone-700">聯絡電話 <span class="text-rose-500">*</span></label>
+              <input type="tel" id="input-phone" placeholder="例如：0912-345-678" class="w-full px-4 py-3 rounded-xl border border-stone-200 bg-stone-50 focus:bg-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all outline-none" />
+            </div>
+          </div>
+
+          <div class="space-y-2">
+            <label class="text-sm font-medium text-stone-700">電子信箱</label>
+            <input type="email" id="input-email" placeholder="用於接收預約確認信" class="w-full px-4 py-3 rounded-xl border border-stone-200 bg-stone-50 focus:bg-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all outline-none" />
+          </div>
+
+          <div class="space-y-2">
+            <label class="text-sm font-medium text-stone-700">選擇偏好的精油配方 <span class="text-rose-500">*</span></label>
+            <div class="relative">
+              <select id="input-oil" class="w-full px-4 py-3 rounded-xl border border-stone-200 bg-stone-50 focus:bg-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all outline-none appearance-none">
+                <option value="" disabled selected>請選擇您的香氣偏好...</option>
+              </select>
+              <div class="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-stone-400">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                </svg>
+              </div>
+            </div>
+          </div>
+
+          <div class="space-y-2">
+            <label class="text-sm font-medium text-stone-700">特殊需求備註</label>
+            <textarea id="input-notes" placeholder="例如：希望加強肩頸按摩、近期有受傷部位等..." rows="3" class="w-full px-4 py-3 rounded-xl border border-stone-200 bg-stone-50 focus:bg-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all outline-none resize-none"></textarea>
+          </div>
+        </div>
+      </div>
+
+      <div id="step-4" class="step-container bg-white p-6 sm:p-8 rounded-3xl shadow-sm border border-stone-100 animate-fade-in">
+        <div class="mb-8">
+          <h2 class="text-2xl font-bold text-stone-800 mb-2">確認預約資料</h2>
+          <p class="text-stone-500 text-sm">請確認資料正確，送出後即可用姓名與手機查詢預約。</p>
+        </div>
+
+        <div class="bg-stone-50 rounded-2xl p-6 text-left space-y-4 border border-stone-100 shadow-sm">
+          <div class="flex justify-between gap-4 border-b border-stone-200 pb-4">
+            <span class="text-stone-500">預約姓名</span>
+            <span id="confirm-name" class="font-semibold text-stone-800 text-right"></span>
+          </div>
+          <div class="flex justify-between gap-4 border-b border-stone-200 pb-4">
+            <span class="text-stone-500">手機號碼</span>
+            <span id="confirm-phone" class="font-semibold text-stone-800 text-right"></span>
+          </div>
+          <div class="flex justify-between gap-4 border-b border-stone-200 pb-4">
+            <span class="text-stone-500">預約日期</span>
+            <span id="confirm-date" class="font-semibold text-stone-800 text-right"></span>
+          </div>
+          <div class="flex justify-between gap-4 border-b border-stone-200 pb-4">
+            <span class="text-stone-500">預約時間</span>
+            <span id="confirm-time" class="font-semibold text-stone-800 text-right"></span>
+          </div>
+          <div class="flex justify-between gap-4 border-b border-stone-200 pb-4">
+            <span class="text-stone-500">選擇療程</span>
+            <span id="confirm-service" class="font-semibold text-stone-800 text-right w-2/3"></span>
+          </div>
+          <div class="flex justify-between gap-4 border-b border-stone-200 pb-4">
+            <span class="text-stone-500">精油偏好</span>
+            <span id="confirm-oil" class="font-semibold text-emerald-700 text-right w-2/3"></span>
+          </div>
+          <div class="flex justify-between gap-4">
+            <span class="text-stone-500">備註</span>
+            <span id="confirm-notes" class="font-semibold text-stone-800 text-right w-2/3"></span>
+          </div>
+        </div>
+
+        <button onclick="currentStep = 3; updateUI(); window.scrollTo({ top: 0, behavior: 'smooth' });" class="mt-5 w-full sm:w-auto bg-white border-2 border-stone-300 text-stone-700 hover:bg-stone-50 font-semibold py-3 px-8 rounded-xl transition-all duration-300">
+          返回修改資料
+        </button>
+      </div>
+
+      <div id="step-5" class="step-container bg-white p-8 sm:p-12 rounded-3xl shadow-xl border border-emerald-100 text-center animate-fade-in relative overflow-hidden">
+        <div class="w-20 h-20 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mx-auto mb-6 shadow-inner">
+          <svg class="w-10 h-10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
+            <polyline points="22 4 12 14.01 9 11.01" />
+          </svg>
+        </div>
+
+        <h2 class="text-3xl font-bold text-stone-800 mb-2">預約成功！</h2>
+        <p class="text-stone-500 mb-8">我們已將預約資訊記錄。</p>
+
+        <div class="bg-stone-50 rounded-2xl p-6 text-left max-w-md mx-auto space-y-4 border border-stone-100 shadow-sm">
+          <div class="flex justify-between border-b border-stone-200 pb-4">
+            <span class="text-stone-500">預約編號</span>
+            <span id="result-booking-id" class="font-semibold text-emerald-700"></span>
+          </div>
+          <div class="flex justify-between border-b border-stone-200 pb-4">
+            <span class="text-stone-500">預約姓名</span>
+            <span id="result-name" class="font-semibold text-stone-800"></span>
+          </div>
+          <div class="flex justify-between border-b border-stone-200 pb-4">
+            <span class="text-stone-500">預約日期</span>
+            <span id="result-date" class="font-semibold text-stone-800"></span>
+          </div>
+          <div class="flex justify-between border-b border-stone-200 pb-4">
+            <span class="text-stone-500">預約時間</span>
+            <span id="result-time" class="font-semibold text-stone-800"></span>
+          </div>
+          <div class="flex justify-between border-b border-stone-200 pb-4">
+            <span class="text-stone-500">選擇療程</span>
+            <span id="result-service" class="font-semibold text-stone-800 text-right w-1/2"></span>
+          </div>
+          <div class="flex justify-between">
+            <span class="text-stone-500">精油偏好</span>
+            <span id="result-oil" class="font-semibold text-emerald-700 text-right w-1/2"></span>
+          </div>
+        </div>
+
+        <div class="mt-10 flex flex-col sm:flex-row gap-3 justify-center">
+          <button onclick="showQueryFlow()" class="bg-emerald-700 text-white hover:bg-emerald-800 font-semibold py-3 px-8 rounded-xl transition-all duration-300">
+            查詢我的預約
+          </button>
+          <button onclick="resetBooking()" class="bg-white border-2 border-emerald-600 text-emerald-700 hover:bg-emerald-50 font-semibold py-3 px-8 rounded-xl transition-all duration-300">
+            再次預約
+          </button>
+        </div>
+      </div>
+
+      <div id="action-buttons" class="mt-8 flex justify-end">
+        <button id="next-btn" onclick="handleNext()" class="bg-emerald-700 hover:bg-emerald-800 text-white font-semibold py-4 px-10 rounded-2xl shadow-lg hover:shadow-xl hover:-translate-y-0.5 transition-all duration-300 flex items-center gap-2">
+          <span id="next-btn-text">下一步</span>
+          <svg id="next-btn-icon" class="rotate-180 w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="15 18 9 12 15 6" />
+          </svg>
+        </button>
+      </div>
+    </section>
+
+    <section id="view-query" class="view-container">
+      <div class="bg-white p-6 sm:p-8 rounded-3xl shadow-sm border border-stone-100">
+        <div class="mb-8">
+          <h2 class="text-2xl font-bold text-stone-800 mb-2">查詢我的預約</h2>
+          <p class="text-stone-500 text-sm">請輸入預約時留下的姓名與手機。</p>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+          <div class="space-y-2">
+            <label class="text-sm font-medium text-stone-700">姓名 <span class="text-rose-500">*</span></label>
+            <input id="query-name" type="text" placeholder="請輸入姓名" class="w-full px-4 py-3 rounded-xl border border-stone-200 bg-stone-50 focus:bg-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all outline-none" />
+          </div>
+          <div class="space-y-2">
+            <label class="text-sm font-medium text-stone-700">手機 <span class="text-rose-500">*</span></label>
+            <input id="query-phone" type="tel" placeholder="請輸入手機號碼" class="w-full px-4 py-3 rounded-xl border border-stone-200 bg-stone-50 focus:bg-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all outline-none" />
+          </div>
+        </div>
+
+        <button id="query-btn" onclick="queryMyBookings()" class="mt-6 w-full bg-emerald-700 hover:bg-emerald-800 text-white font-semibold py-4 rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300">
+          查詢預約
+        </button>
+
+        <div id="query-result" class="mt-8 space-y-3"></div>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwj4UuZ_kJkMtqSW6cdt5XUCpD5F0BG1MBjREsyDDjnb9xwKFi42PhL_iyKyw0TQVzuCQ/exec';
+    const LIFF_ID = '2010318197-3zqjPH9v';
+
+    const icons = {
+      FlowerIcon: '<svg class="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3" /><path d="M12 16.5A4.5 4.5 0 1 1 7.5 12 4.5 4.5 0 1 1 12 7.5a4.5 4.5 0 1 1 4.5 4.5 4.5 4.5 0 1 1-4.5 4.5z" /></svg>',
+      LeafIcon: '<svg class="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 20A7 7 0 0 1 9.8 6.1C15.5 5 17 4.48 19 2c1 2 2 4.18 2 8 0 5.5-4.78 10-10 10Z" /><path d="M2 21c0-3 1.85-5.36 5.08-6C9.5 14.52 12 13 13 12" /></svg>',
+      SparklesIcon: '<svg class="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3-1.9 5.8a2 2 0 0 1-1.2 1.2L3 12l5.8 1.9a2 2 0 0 1 1.2 1.2L12 21l1.9-5.8a2 2 0 0 1 1.2-1.2L21 12l-5.8-1.9a2 2 0 0 1-1.2-1.2Z" /></svg>',
+      DropletIcon: '<svg class="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22a7 7 0 0 0 7-7c0-2-1-3.9-3-5.5s-3.5-4-4-6.5c-.5 2.5-2 4.9-4 6.5C6 11.1 5 13 5 15a7 7 0 0 0 7 7z" /></svg>',
+      CheckCircleIcon: '<svg class="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" /><polyline points="22 4 12 14.01 9 11.01" /></svg>'
+    };
+
+    const services = [
+      { id: 's1', name: '深度放鬆薰衣草全身按摩', description: '結合瑞典式長推手法與頂級真實薰衣草精油，深層釋放肌肉壓力，顯著改善睡眠品質與身心平衡。', duration: '90 分鐘', price: 'NT$ 2,800', icon: 'FlowerIcon', color: 'bg-purple-100 text-purple-700' },
+      { id: 's2', name: '活力甜橙背部釋壓', description: '專為久坐族群設計，針對肩頸與背部僵硬，使用充滿陽光活力的甜橙精油，迅速驅趕疲勞感。', duration: '60 分鐘', price: 'NT$ 1,800', icon: 'LeafIcon', color: 'bg-orange-100 text-orange-700' },
+      { id: 's3', name: '玫瑰煥顏提拉芳療', description: '臉部專屬奢華芳療，使用珍貴大馬士革玫瑰精油搭配撥筋手法，深層滋潤、活化並緊緻臉部肌膚。', duration: '75 分鐘', price: 'NT$ 3,200', icon: 'SparklesIcon', color: 'bg-rose-100 text-rose-700' },
+      { id: 's4', name: '淨化排毒茶樹足部SPA', description: '從溫暖的死海鹽足部浴開始，搭配茶樹與薄荷精油深層按摩小腿與足底穴位，找回輕盈步伐。', duration: '45 分鐘', price: 'NT$ 1,200', icon: 'DropletIcon', color: 'bg-teal-100 text-teal-700' }
+    ];
+
+    const timeSlots = ['10:00 AM', '11:30 AM', '01:00 PM', '02:30 PM', '04:00 PM', '05:30 PM', '07:00 PM'];
+
+    const oilOptions = [
+      { id: 'lavender', name: '薰衣草 (Lavender) - 舒緩放鬆、助眠' },
+      { id: 'orange', name: '甜橙 (Sweet Orange) - 提振精神、抗憂鬱' },
+      { id: 'peppermint', name: '薄荷 (Peppermint) - 清新舒暢、緩解頭痛' },
+      { id: 'rose', name: '玫瑰 (Rose) - 浪漫奢華、滋潤肌膚' },
+      { id: 'tea_tree', name: '茶樹 (Tea Tree) - 淨化平衡、增強防禦' }
+    ];
+
+    let currentView = 'home';
+    let currentStep = 1;
+    let availableDays = generateNext14Days();
+    let bookingData = getEmptyBookingData();
+    let lineProfile = {
+      lineUserId: '',
+      lineDisplayName: '',
+      linePictureUrl: ''
+    };
+
+    document.addEventListener('DOMContentLoaded', async () => {
+      await initLiff();
+      renderServices();
+      renderDates();
+      renderTimes();
+      renderOilOptions();
+      updateUI();
+    });
+
+    async function initLiff() {
+      if (!window.liff) {
+        updateLineStatus('LIFF SDK 載入失敗，可改用姓名與手機查詢');
+        showToast('LIFF SDK 載入失敗，請從 LINE 內重新開啟', 'error');
+        return;
+      }
+
+      try {
+        await liff.init({
+          liffId: LIFF_ID,
+          withLoginOnExternalBrowser: true
+        });
+
+        if (!liff.isLoggedIn()) {
+          liff.login();
+          return;
+        }
+
+        const profile = await liff.getProfile();
+        lineProfile = {
+          lineUserId: profile.userId || '',
+          lineDisplayName: profile.displayName || '',
+          linePictureUrl: profile.pictureUrl || ''
+        };
+        updateLineStatus();
+      } catch (error) {
+        console.error('LIFF 初始化失敗', error);
+        updateLineStatus('LINE 身份讀取失敗，可改用姓名與手機查詢');
+        showToast('LINE 身份讀取失敗，仍可用姓名與手機預約', 'error');
+      }
+    }
+
+    function updateLineStatus(message) {
+      const status = document.getElementById('line-status');
+      if (!status) return;
+
+      if (message) {
+        status.innerText = message;
+        status.className = 'mt-3 text-xs text-amber-600';
+        return;
+      }
+
+      if (lineProfile.lineDisplayName) {
+        status.innerText = `已連結 LINE：${lineProfile.lineDisplayName}`;
+        status.className = 'mt-3 text-xs text-emerald-700 font-medium';
+      } else {
+        status.innerText = '尚未取得 LINE 身份，可用姓名與手機查詢';
+        status.className = 'mt-3 text-xs text-stone-400';
+      }
+    }
+
+    function getEmptyBookingData() {
+      return {
+        service: null,
+        date: null,
+        time: null,
+        name: '',
+        phone: '',
+        email: '',
+        preferredOil: '',
+        notes: '',
+        bookingId: ''
+      };
+    }
+
+    function normalizeTaiwanMobile(rawPhone) {
+      let digits = String(rawPhone || '').replace(/[^0-9]/g, '');
+
+      if (digits.startsWith('886') && digits.length === 12) {
+        digits = '0' + digits.slice(3);
+      }
+
+      return digits;
+    }
+
+    function isValidTaiwanMobile(rawPhone) {
+      return /^09\d{8}$/.test(normalizeTaiwanMobile(rawPhone));
+    }
+
+    function generateNext14Days() {
+      const days = [];
+      const dayNames = ['週日', '週一', '週二', '週三', '週四', '週五', '週六'];
+
+      for (let i = 1; i <= 14; i++) {
+        const d = new Date();
+        d.setDate(d.getDate() + i);
+        days.push({
+          dayOfWeek: dayNames[d.getDay()],
+          dayOfMonth: d.getDate(),
+          fullDate: d.toISOString().split('T')[0],
+          month: d.getMonth() + 1
+        });
+      }
+
+      return days;
+    }
+
+    function showToast(message, type = 'error') {
+      const container = document.getElementById('toast-container');
+      const isError = type === 'error';
+      const bgColor = isError ? 'bg-rose-50/90' : 'bg-emerald-50/90';
+      const textColor = isError ? 'text-rose-700' : 'text-emerald-700';
+      const borderColor = isError ? 'border-rose-200' : 'border-emerald-200';
+      const icon = isError
+        ? '<svg class="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" /></svg>'
+        : '<svg class="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" /><polyline points="22 4 12 14.01 9 11.01" /></svg>';
+
+      const toast = document.createElement('div');
+      toast.className = `flex items-center gap-3 px-6 py-3 rounded-2xl shadow-lg border backdrop-blur-md animate-slide-up mb-2 ${bgColor} ${textColor} ${borderColor}`;
+      toast.innerHTML = `${icon}<span class="font-medium tracking-wide">${message}</span>`;
+
+      container.appendChild(toast);
+      setTimeout(() => {
+        toast.style.opacity = '0';
+        toast.style.transition = 'opacity 0.3s';
+        setTimeout(() => toast.remove(), 300);
+      }, 3000);
+    }
+
+    function showHome() {
+      currentView = 'home';
+      updateUI();
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    function showBookingFlow() {
+      currentView = 'booking';
+      currentStep = currentStep >= 5 ? 1 : Math.min(currentStep, 4);
+      updateUI();
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    function showQueryFlow() {
+      currentView = 'query';
+      updateUI();
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    function handleBack() {
+      if (currentView === 'booking' && currentStep > 1 && currentStep < 5) {
+        currentStep--;
+        updateUI();
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+        return;
+      }
+
+      showHome();
+    }
+
+    async function handleNext() {
+      if (currentStep === 1 && !bookingData.service) {
+        return showToast('請先選擇一項療程');
+      }
+
+      if (currentStep === 2) {
+        if (!bookingData.date) return showToast('請選擇預約日期');
+        if (!bookingData.time) return showToast('請選擇預約時間');
+      }
+
+      if (currentStep === 3) {
+        bookingData.name = document.getElementById('input-name').value.trim();
+        bookingData.phone = document.getElementById('input-phone').value.trim();
+        bookingData.email = document.getElementById('input-email').value.trim();
+        bookingData.preferredOil = document.getElementById('input-oil').value;
+        bookingData.notes = document.getElementById('input-notes').value.trim();
+
+        if (!bookingData.name) return showToast('請填寫您的姓名');
+        if (!bookingData.phone) return showToast('請填寫聯絡電話');
+        if (!isValidTaiwanMobile(bookingData.phone)) return showToast('請輸入正確的台灣手機號碼，例如 0912345678');
+        if (!bookingData.preferredOil) return showToast('請選擇偏好的精油配方');
+
+        bookingData.phone = normalizeTaiwanMobile(bookingData.phone);
+        document.getElementById('input-phone').value = bookingData.phone;
+        renderConfirmation();
+      }
+
+      if (currentStep === 4) {
+        const submitResult = await submitBooking();
+        if (!submitResult.ok) {
+          return showToast(submitResult.message || '預約送出失敗，請稍後再試');
+        }
+
+        bookingData.bookingId = submitResult.bookingId || bookingData.bookingId || '已建立';
+        document.getElementById('result-booking-id').innerText = bookingData.bookingId;
+        document.getElementById('result-name').innerText = bookingData.name;
+        document.getElementById('result-date').innerText = bookingData.date;
+        document.getElementById('result-time').innerText = bookingData.time;
+        document.getElementById('result-service').innerText = bookingData.service.name;
+        document.getElementById('result-oil').innerText = bookingData.preferredOil.split(' ')[0];
+      }
+
+      if (currentStep < 5) {
+        currentStep++;
+        updateUI();
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      }
+    }
+
+    function renderConfirmation() {
+      document.getElementById('confirm-name').innerText = bookingData.name;
+      document.getElementById('confirm-phone').innerText = bookingData.phone;
+      document.getElementById('confirm-date').innerText = bookingData.date;
+      document.getElementById('confirm-time').innerText = bookingData.time;
+      document.getElementById('confirm-service').innerText = bookingData.service.name;
+      document.getElementById('confirm-oil').innerText = bookingData.preferredOil;
+      document.getElementById('confirm-notes').innerText = bookingData.notes || '無';
+    }
+
+    async function submitBooking() {
+      const nextBtn = document.getElementById('next-btn');
+      const nextBtnText = document.getElementById('next-btn-text');
+      const originalText = nextBtnText.innerText;
+
+      nextBtn.disabled = true;
+      nextBtn.classList.add('opacity-75', 'cursor-wait');
+      nextBtnText.innerText = '送出中...';
+
+      const payload = {
+        action: 'createBooking',
+        serviceId: bookingData.service.id,
+        serviceName: bookingData.service.name,
+        serviceDuration: bookingData.service.duration,
+        servicePrice: bookingData.service.price,
+        date: bookingData.date,
+        time: bookingData.time,
+        name: bookingData.name,
+        phone: bookingData.phone,
+        email: bookingData.email,
+        preferredOil: bookingData.preferredOil,
+        notes: bookingData.notes,
+        lineUserId: lineProfile.lineUserId,
+        lineDisplayName: lineProfile.lineDisplayName,
+        linePictureUrl: lineProfile.linePictureUrl
+      };
+
+      try {
+        if (!SCRIPT_URL) {
+          console.log('尚未設定 SCRIPT_URL，以下為預約 payload：', payload);
+          await new Promise(resolve => setTimeout(resolve, 600));
+          return { ok: true, bookingId: 'DEMO' + Date.now() };
+        }
+
+        const response = await fetch(SCRIPT_URL, {
+          method: 'POST',
+          body: JSON.stringify(payload),
+          headers: {
+            'Content-Type': 'text/plain;charset=utf-8'
+          }
+        });
+
+        if (!response.ok && response.type !== 'opaque') {
+          return { ok: false, message: '預約送出失敗，請確認後台設定' };
+        }
+
+        if (response.type === 'opaque') {
+          return { ok: true };
+        }
+
+        const data = await response.json();
+        return data.ok ? data : { ok: false, message: data.message || '預約送出失敗' };
+      } catch (error) {
+        console.error(error);
+        return { ok: false, message: '連線發生錯誤，請稍後再試' };
+      } finally {
+        nextBtn.disabled = false;
+        nextBtn.classList.remove('opacity-75', 'cursor-wait');
+        nextBtnText.innerText = originalText;
+      }
+    }
+
+    async function queryMyBookings() {
+      const name = document.getElementById('query-name').value.trim();
+      const phone = document.getElementById('query-phone').value.trim();
+      const result = document.getElementById('query-result');
+      const queryBtn = document.getElementById('query-btn');
+      const hasLineIdentity = Boolean(lineProfile.lineUserId);
+
+      if (!hasLineIdentity && !name) return showToast('請輸入姓名');
+      if (!hasLineIdentity && !phone) return showToast('請輸入手機號碼');
+      if (phone && !isValidTaiwanMobile(phone)) return showToast('請輸入正確的台灣手機號碼，例如 0912345678');
+
+      const normalizedPhone = phone ? normalizeTaiwanMobile(phone) : '';
+      if (normalizedPhone) {
+        document.getElementById('query-phone').value = normalizedPhone;
+      }
+
+      queryBtn.disabled = true;
+      queryBtn.classList.add('opacity-75', 'cursor-wait');
+      queryBtn.innerText = '查詢中...';
+      result.innerHTML = '';
+
+      try {
+        let bookings = [];
+
+        if (!SCRIPT_URL) {
+          await new Promise(resolve => setTimeout(resolve, 500));
+          bookings = [
+            {
+              serviceName: '深度放鬆薰衣草全身按摩',
+              date: availableDays[1].fullDate,
+              time: '02:30 PM',
+              status: '已預約',
+              preferredOil: '薰衣草 (Lavender) - 舒緩放鬆、助眠',
+              notes: '希望加強肩頸按摩',
+              bookingId: 'DEMO001'
+            }
+          ];
+        } else {
+          const response = await fetch(SCRIPT_URL, {
+            method: 'POST',
+            body: JSON.stringify({
+              action: 'queryBookings',
+              name: name,
+              phone: normalizedPhone,
+              lineUserId: lineProfile.lineUserId
+            }),
+            headers: {
+              'Content-Type': 'text/plain;charset=utf-8'
+            }
+          });
+
+          const data = await response.json();
+          bookings = data.bookings || [];
+        }
+
+        renderQueryResults(bookings);
+      } catch (error) {
+        console.error(error);
+        showToast('查詢失敗，請稍後再試');
+      } finally {
+        queryBtn.disabled = false;
+        queryBtn.classList.remove('opacity-75', 'cursor-wait');
+        queryBtn.innerText = '查詢預約';
+      }
+    }
+
+    function renderQueryResults(bookings) {
+      const result = document.getElementById('query-result');
+
+      if (!bookings.length) {
+        result.innerHTML = `
+          <div class="border border-stone-200 bg-stone-50 rounded-2xl p-5 text-center text-stone-500">
+            查無符合的預約紀錄
+          </div>
+        `;
+        return;
+      }
+
+      result.innerHTML = bookings.map(booking => `
+        <div class="border border-emerald-100 bg-emerald-50/50 rounded-2xl p-5">
+          <div class="flex items-start justify-between gap-4 mb-4">
+            <div>
+              <h3 class="font-bold text-stone-800">${booking.serviceName || ''}</h3>
+              <p class="text-sm text-stone-500 mt-1">${booking.date || ''} ${booking.time || ''}</p>
+              <p class="text-xs text-stone-400 mt-1">預約編號：${booking.bookingId || '未提供'}</p>
+            </div>
+            <span class="shrink-0 bg-white text-emerald-700 border border-emerald-200 rounded-full px-3 py-1 text-xs font-semibold">
+              ${booking.status || '已預約'}
+            </span>
+          </div>
+          <div class="text-sm text-stone-600 space-y-1">
+            <p><span class="text-stone-400">精油偏好：</span>${booking.preferredOil || '未填寫'}</p>
+            <p><span class="text-stone-400">備註：</span>${booking.notes || '無'}</p>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    function updateUI() {
+      ['home', 'booking', 'query'].forEach(view => {
+        document.getElementById(`view-${view}`).classList.toggle('active', currentView === view);
+      });
+
+      [1, 2, 3, 4, 5].forEach(step => {
+        document.getElementById(`step-${step}`).classList.toggle('active', currentStep === step);
+      });
+
+      const backBtn = document.getElementById('header-back-btn');
+      const shouldShowBack = currentView !== 'home' && currentStep < 5;
+      backBtn.classList.toggle('hidden', !shouldShowBack);
+      backBtn.classList.toggle('flex', shouldShowBack);
+
+      const actionBtnArea = document.getElementById('action-buttons');
+      const progressSection = document.getElementById('progress-section');
+
+      if (currentView === 'booking' && currentStep < 5) {
+        actionBtnArea.style.display = 'flex';
+        progressSection.style.display = 'block';
+
+        const nextBtnText = document.getElementById('next-btn-text');
+        const nextBtnIcon = document.getElementById('next-btn-icon');
+        if (currentStep === 4) {
+          nextBtnText.innerText = '送出預約';
+          nextBtnIcon.style.display = 'none';
+        } else if (currentStep === 3) {
+          nextBtnText.innerText = '確認資料';
+          nextBtnIcon.style.display = 'none';
+        } else {
+          nextBtnText.innerText = '下一步';
+          nextBtnIcon.style.display = 'block';
+        }
+
+        document.getElementById('progress-bar').style.width = `${((currentStep - 1) / 3) * 100}%`;
+
+        [1, 2, 3, 4].forEach(num => {
+          const indicator = document.getElementById(`step-indicator-${num}`);
+          const text = document.getElementById(`step-text-${num}`);
+
+          if (currentStep >= num) {
+            indicator.className = 'w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm transition-all duration-500 bg-emerald-600 text-white shadow-md ring-4 ring-emerald-50';
+            text.classList.add('text-emerald-800');
+          } else {
+            indicator.className = 'w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm transition-all duration-500 bg-white text-stone-400 border-2 border-stone-200';
+            text.classList.remove('text-emerald-800');
+          }
+
+          indicator.innerHTML = currentStep > num ? icons.CheckCircleIcon.replace('w-6 h-6', 'w-5 h-5') : num;
+        });
+      } else {
+        actionBtnArea.style.display = 'none';
+        progressSection.style.display = 'none';
+      }
+
+      if (currentStep === 2 && bookingData.service) {
+        document.getElementById('summary-icon-container').className = `p-2 rounded-xl ${bookingData.service.color}`;
+        document.getElementById('summary-icon-container').innerHTML = icons[bookingData.service.icon].replace('w-6 h-6', 'w-5 h-5');
+        document.getElementById('summary-service-name').innerText = bookingData.service.name;
+        document.getElementById('summary-service-duration').innerText = `(${bookingData.service.duration})`;
+      }
+    }
+
+    function selectService(serviceId) {
+      bookingData.service = services.find(service => service.id === serviceId);
+      renderServices();
+    }
+
+    function selectDate(fullDate) {
+      bookingData.date = fullDate;
+      bookingData.time = null;
+      renderDates();
+      renderTimes();
+
+      const timeSection = document.getElementById('time-section');
+      timeSection.classList.remove('opacity-40', 'pointer-events-none');
+      timeSection.classList.add('opacity-100');
+    }
+
+    function selectTime(time) {
+      bookingData.time = time;
+      renderTimes();
+    }
+
+    function resetBooking() {
+      bookingData = getEmptyBookingData();
+      currentStep = 1;
+      currentView = 'booking';
+
+      document.getElementById('input-name').value = '';
+      document.getElementById('input-phone').value = '';
+      document.getElementById('input-email').value = '';
+      document.getElementById('input-oil').value = '';
+      document.getElementById('input-notes').value = '';
+
+      const timeSection = document.getElementById('time-section');
+      timeSection.classList.add('opacity-40', 'pointer-events-none');
+      timeSection.classList.remove('opacity-100');
+
+      renderServices();
+      renderDates();
+      renderTimes();
+      updateUI();
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    function renderServices() {
+      const container = document.getElementById('services-container');
+      container.innerHTML = services.map(service => {
+        const isSelected = bookingData.service && bookingData.service.id === service.id;
+        const borderClass = isSelected ? 'border-emerald-500 bg-emerald-50/50 shadow-md ring-4 ring-emerald-50' : 'border-transparent bg-white hover:border-stone-200 hover:shadow-sm shadow-sm';
+        const checkOpacity = isSelected ? 'opacity-100' : 'opacity-0';
+
+        return `
+          <div onclick="selectService('${service.id}')" class="relative p-6 rounded-3xl cursor-pointer transition-all duration-300 border-2 ${borderClass}">
+            <div class="flex justify-between items-start mb-4">
+              <div class="p-3 rounded-2xl ${service.color}">
+                ${icons[service.icon]}
+              </div>
+              <div class="text-right">
+                <span class="block font-bold text-lg text-emerald-900">${service.price}</span>
+                <span class="text-xs text-stone-500">${service.duration}</span>
+              </div>
+            </div>
+            <h3 class="text-lg font-bold text-stone-800 mb-2">${service.name}</h3>
+            <p class="text-sm text-stone-500 leading-relaxed">${service.description}</p>
+            <div class="absolute top-4 right-4 transition-opacity duration-300 ${checkOpacity}">
+              <div class="w-6 h-6 bg-emerald-500 rounded-full text-white flex items-center justify-center">
+                ${icons.CheckCircleIcon.replace('w-6 h-6', 'w-4 h-4')}
+              </div>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    function renderDates() {
+      const container = document.getElementById('dates-container');
+      container.innerHTML = availableDays.map(day => {
+        const isSelected = bookingData.date === day.fullDate;
+        const baseClass = isSelected
+          ? 'border-emerald-600 bg-emerald-600 text-white shadow-md'
+          : 'border-stone-200 bg-white text-stone-600 hover:border-emerald-300';
+        const textClass = isSelected ? 'text-emerald-100' : 'text-stone-400';
+
+        return `
+          <div onclick="selectDate('${day.fullDate}')" class="snap-center shrink-0 w-20 h-24 rounded-2xl border-2 flex flex-col items-center justify-center cursor-pointer transition-all duration-200 ${baseClass}">
+            <span class="text-xs mb-1 ${textClass}">${day.month}月 / ${day.dayOfWeek}</span>
+            <span class="text-2xl font-bold">${day.dayOfMonth}</span>
+          </div>
+        `;
+      }).join('');
+    }
+
+    function renderTimes() {
+      const container = document.getElementById('times-container');
+      container.innerHTML = timeSlots.map(time => {
+        const isSelected = bookingData.time === time;
+        const baseClass = isSelected
+          ? 'border-emerald-600 bg-emerald-600 text-white shadow-md'
+          : 'border-stone-200 bg-white text-stone-600 hover:border-emerald-300 hover:bg-emerald-50';
+
+        return `
+          <button onclick="selectTime('${time}')" class="py-3 px-4 rounded-xl font-medium text-sm transition-all duration-200 border-2 ${baseClass}">
+            ${time}
+          </button>
+        `;
+      }).join('');
+    }
+
+    function renderOilOptions() {
+      const select = document.getElementById('input-oil');
+      const existingValues = new Set([...select.options].map(option => option.value));
+
+      oilOptions.forEach(oil => {
+        if (existingValues.has(oil.name)) return;
+
+        const option = document.createElement('option');
+        option.value = oil.name;
+        option.innerText = oil.name;
+        select.appendChild(option);
+      });
+    }
+  </script>
+</body>
+</html>
