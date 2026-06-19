@@ -408,14 +408,14 @@
     let lastQueryResults = [];
     let demoCanceledBookingIds = new Set();
 
-    document.addEventListener('DOMContentLoaded', async () => {
-      await initLiff();
+    document.addEventListener('DOMContentLoaded', () => {
       renderServices();
       renderDates();
       renderTimes();
       renderOilOptions();
       updateUI();
       updateQueryIdentityUI();
+      initLiff();
     });
 
     async function initLiff() {
@@ -1155,3 +1155,4 @@
   </script>
 </body>
 </html>
+
