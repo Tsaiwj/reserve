@@ -179,7 +179,12 @@
         </div>
 
         <div class="space-y-6">
-          <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div id="saved-contact-note" class="hidden rounded-2xl border border-emerald-100 bg-emerald-50 p-5">
+            <p class="font-semibold text-emerald-900">已使用您上次預約留下的聯絡資料</p>
+            <p class="text-sm text-emerald-700 mt-1">本次預約不需要再次填寫真實姓名與電話。</p>
+          </div>
+
+          <div id="contact-fields" class="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div class="space-y-2">
               <label class="text-sm font-medium text-stone-700">真實姓名 <span class="text-rose-500">*</span></label>
               <input type="text" id="input-name" placeholder="例如：林語堂" class="w-full px-4 py-3 rounded-xl border border-stone-200 bg-stone-50 focus:bg-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all outline-none" />
@@ -394,6 +399,12 @@
       lineDisplayName: '',
       linePictureUrl: ''
     };
+    let customerProfile = {
+      hasProfile: false,
+      name: '',
+      phone: '',
+      email: ''
+    };
     let lastQueryResults = [];
     let demoCanceledBookingIds = new Set();
 
@@ -431,6 +442,7 @@
           lineDisplayName: profile.displayName || '',
           linePictureUrl: profile.pictureUrl || ''
         };
+        await loadCustomerProfile();
         updateLineStatus();
         updateQueryIdentityUI();
       } catch (error) {
@@ -438,6 +450,64 @@
         updateLineStatus('LINE 身份讀取失敗，可改用姓名與手機查詢');
         updateQueryIdentityUI();
         showToast('LINE 身份讀取失敗，仍可用姓名與手機預約', 'error');
+      }
+    }
+
+    async function loadCustomerProfile() {
+      if (!SCRIPT_URL || !lineProfile.lineUserId) return;
+
+      try {
+        const response = await fetch(SCRIPT_URL, {
+          method: 'POST',
+          body: JSON.stringify({
+            action: 'getCustomerProfile',
+            lineUserId: lineProfile.lineUserId
+          }),
+          headers: {
+            'Content-Type': 'text/plain;charset=utf-8'
+          }
+        });
+
+        const data = await response.json();
+        if (data.ok && data.hasProfile && data.profile) {
+          customerProfile = {
+            hasProfile: true,
+            name: data.profile.name || '',
+            phone: data.profile.phone || '',
+            email: data.profile.email || ''
+          };
+
+          applyCustomerProfileToForm();
+        }
+      } catch (error) {
+        console.error('讀取既有客戶資料失敗', error);
+      }
+    }
+
+    function applyCustomerProfileToForm() {
+      if (!customerProfile.hasProfile) return;
+
+      document.getElementById('input-name').value = customerProfile.name;
+      document.getElementById('input-phone').value = customerProfile.phone;
+
+      if (customerProfile.email) {
+        document.getElementById('input-email').value = customerProfile.email;
+      }
+
+      updateContactFieldsUI();
+    }
+
+    function updateContactFieldsUI() {
+      const contactFields = document.getElementById('contact-fields');
+      const savedContactNote = document.getElementById('saved-contact-note');
+      if (!contactFields || !savedContactNote) return;
+
+      if (customerProfile.hasProfile) {
+        contactFields.classList.add('hidden');
+        savedContactNote.classList.remove('hidden');
+      } else {
+        contactFields.classList.remove('hidden');
+        savedContactNote.classList.add('hidden');
       }
     }
 
@@ -598,8 +668,8 @@
       }
 
       if (currentStep === 3) {
-        bookingData.name = document.getElementById('input-name').value.trim();
-        bookingData.phone = document.getElementById('input-phone').value.trim();
+        bookingData.name = customerProfile.hasProfile ? customerProfile.name : document.getElementById('input-name').value.trim();
+        bookingData.phone = customerProfile.hasProfile ? customerProfile.phone : document.getElementById('input-phone').value.trim();
         bookingData.email = document.getElementById('input-email').value.trim();
         bookingData.preferredOil = document.getElementById('input-oil').value;
         bookingData.notes = document.getElementById('input-notes').value.trim();
@@ -610,6 +680,7 @@
         if (!bookingData.preferredOil) return showToast('請選擇偏好的精油配方');
 
         bookingData.phone = normalizeTaiwanMobile(bookingData.phone);
+        document.getElementById('input-name').value = bookingData.name;
         document.getElementById('input-phone').value = bookingData.phone;
         renderConfirmation();
       }
@@ -621,6 +692,15 @@
         }
 
         bookingData.bookingId = submitResult.bookingId || bookingData.bookingId || '已建立';
+        if (lineProfile.lineUserId && !customerProfile.hasProfile) {
+          customerProfile = {
+            hasProfile: true,
+            name: bookingData.name,
+            phone: bookingData.phone,
+            email: bookingData.email
+          };
+          applyCustomerProfileToForm();
+        }
         document.getElementById('result-booking-id').innerText = bookingData.bookingId;
         document.getElementById('result-name').innerText = bookingData.name;
         document.getElementById('result-date').innerText = bookingData.date;
@@ -945,6 +1025,10 @@
         document.getElementById('summary-service-name').innerText = bookingData.service.name;
         document.getElementById('summary-service-duration').innerText = `(${bookingData.service.duration})`;
       }
+
+      if (currentStep === 3) {
+        updateContactFieldsUI();
+      }
     }
 
     function selectService(serviceId) {
@@ -975,9 +1059,10 @@
 
       document.getElementById('input-name').value = '';
       document.getElementById('input-phone').value = '';
-      document.getElementById('input-email').value = '';
+      document.getElementById('input-email').value = customerProfile.hasProfile ? customerProfile.email : '';
       document.getElementById('input-oil').value = '';
       document.getElementById('input-notes').value = '';
+      applyCustomerProfileToForm();
 
       const timeSection = document.getElementById('time-section');
       timeSection.classList.add('opacity-40', 'pointer-events-none');
