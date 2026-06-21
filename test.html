@@ -35,6 +35,20 @@
 </head>
 <body class="min-h-screen bg-stone-50 text-stone-800 font-sans selection:bg-emerald-200 selection:text-emerald-900 pb-12">
   <div id="toast-container" class="fixed top-6 left-1/2 -translate-x-1/2 z-50"></div>
+  <div id="confirm-modal" class="hidden fixed inset-0 z-50 items-center justify-center bg-stone-950/50 px-4">
+    <div class="w-full max-w-sm rounded-2xl bg-white p-6 shadow-2xl border border-stone-100 animate-fade-in">
+      <h3 id="confirm-modal-title" class="text-lg font-bold text-stone-900">確認取消預約</h3>
+      <p id="confirm-modal-message" class="mt-3 text-sm leading-6 text-stone-600"></p>
+      <div class="mt-6 flex flex-col sm:flex-row-reverse gap-3">
+        <button id="confirm-modal-confirm" type="button" class="w-full rounded-xl bg-rose-600 px-5 py-3 text-sm font-semibold text-white hover:bg-rose-700 transition-colors">
+          確認取消
+        </button>
+        <button id="confirm-modal-cancel" type="button" class="w-full rounded-xl border border-stone-200 bg-white px-5 py-3 text-sm font-semibold text-stone-600 hover:bg-stone-50 transition-colors">
+          返回
+        </button>
+      </div>
+    </div>
+  </div>
 
   <header class="bg-white/80 backdrop-blur-md sticky top-0 z-40 border-b border-stone-200 shadow-sm">
     <div class="max-w-4xl mx-auto px-6 py-4 flex justify-between items-center">
@@ -929,7 +943,12 @@
         return showToast('這筆預約已經取消');
       }
 
-      const confirmed = window.confirm(`確定要取消 ${booking.date || ''} ${booking.time || ''} 的預約嗎？`);
+      const confirmed = await showConfirmDialog({
+        title: '確認取消預約',
+        message: `確定要取消 ${booking.date || ''} ${booking.time || ''} 的預約嗎？`,
+        confirmText: '確認取消',
+        cancelText: '返回'
+      });
       if (!confirmed) return;
 
       try {
@@ -982,7 +1001,7 @@
 
       try {
         if (!SCRIPT_URL) {
-          booking.reminderResponseAction = '保留預約';
+          booking.reminderResponseAction = '已保留';
           showToast('已保留這筆預約', 'success');
           renderQueryResults(lastQueryResults);
           return;
@@ -1015,6 +1034,49 @@
       }
     }
 
+    function showConfirmDialog({ title, message, confirmText = '確認', cancelText = '返回' }) {
+      const modal = document.getElementById('confirm-modal');
+      const titleEl = document.getElementById('confirm-modal-title');
+      const messageEl = document.getElementById('confirm-modal-message');
+      const confirmBtn = document.getElementById('confirm-modal-confirm');
+      const cancelBtn = document.getElementById('confirm-modal-cancel');
+
+      titleEl.innerText = title;
+      messageEl.innerText = message;
+      confirmBtn.innerText = confirmText;
+      cancelBtn.innerText = cancelText;
+
+      modal.classList.remove('hidden');
+      modal.classList.add('flex');
+
+      return new Promise(resolve => {
+        const cleanup = value => {
+          modal.classList.add('hidden');
+          modal.classList.remove('flex');
+          confirmBtn.onclick = null;
+          cancelBtn.onclick = null;
+          modal.onclick = null;
+          document.removeEventListener('keydown', handleKeydown);
+          resolve(value);
+        };
+
+        const handleKeydown = event => {
+          if (event.key === 'Escape') {
+            cleanup(false);
+          }
+        };
+
+        confirmBtn.onclick = () => cleanup(true);
+        cancelBtn.onclick = () => cleanup(false);
+        modal.onclick = event => {
+          if (event.target === modal) {
+            cleanup(false);
+          }
+        };
+        document.addEventListener('keydown', handleKeydown);
+      });
+    }
+
     function renderQueryResults(bookings) {
       const result = document.getElementById('query-result');
       lastQueryResults = bookings;
@@ -1031,25 +1093,29 @@
       result.innerHTML = bookings.map(booking => {
         const status = booking.status || '已預約';
         const isCanceled = status === '已取消';
-        const showReminderActions = !isCanceled && isTomorrowBooking(booking.date);
+        const isKept = isBookingKept(booking);
+        const displayStatus = isKept ? '已保留' : status;
+        const showReminderActions = !isCanceled && !isKept && isTomorrowBooking(booking.date);
         const bookingId = safeBookingId(booking.bookingId);
         const cardClass = isCanceled
           ? 'border-stone-200 bg-stone-50'
           : 'border-emerald-100 bg-emerald-50/50';
         const statusClass = isCanceled
           ? 'bg-white text-stone-500 border-stone-200'
-          : 'bg-white text-emerald-700 border-emerald-200';
+          : isKept
+            ? 'bg-white text-rose-700 border-rose-200'
+            : 'bg-white text-emerald-700 border-emerald-200';
         const keepButton = showReminderActions ? `
-          <button onclick="keepBooking('${bookingId}')" class="w-full sm:w-auto bg-emerald-700 text-white hover:bg-emerald-800 font-semibold py-2.5 px-5 rounded-xl transition-all duration-300">
+          <button onclick="keepBooking('${bookingId}')" class="w-full sm:w-auto bg-rose-600 text-white hover:bg-rose-700 font-semibold py-2.5 px-5 rounded-xl transition-all duration-300">
             保留預約
           </button>
         ` : '';
-        const cancelButton = isCanceled ? '' : `
+        const cancelButton = (isCanceled || isKept) ? '' : `
           <button onclick="cancelBooking('${bookingId}')" class="w-full sm:w-auto bg-white border-2 border-rose-200 text-rose-600 hover:bg-rose-50 font-semibold py-2.5 px-5 rounded-xl transition-all duration-300">
             取消預約
           </button>
         `;
-        const actionButtons = isCanceled ? '' : `
+        const actionButtons = (isCanceled || isKept) ? '' : `
           <div class="mt-4 flex flex-col sm:flex-row gap-2">
             ${keepButton}
             ${cancelButton}
@@ -1065,7 +1131,7 @@
               <p class="text-xs text-stone-400 mt-1">預約編號：${booking.bookingId || '未提供'}</p>
             </div>
             <span class="shrink-0 border ${statusClass} rounded-full px-3 py-1 text-xs font-semibold">
-              ${status}
+              ${displayStatus}
             </span>
           </div>
           <div class="text-sm text-stone-600 space-y-1">
@@ -1082,6 +1148,11 @@
 
     function isTomorrowBooking(dateString) {
       return String(dateString || '').slice(0, 10) === getLocalDateString(1);
+    }
+
+    function isBookingKept(booking) {
+      const action = String(booking.reminderResponseAction || '').trim();
+      return action === '已保留' || action === '保留預約';
     }
 
     function getLocalDateString(offsetDays = 0) {
@@ -1288,5 +1359,6 @@
   </script>
 </body>
 </html>
+
 
 
