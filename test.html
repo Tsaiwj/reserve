@@ -407,6 +407,8 @@
     };
     let lastQueryResults = [];
     let demoCanceledBookingIds = new Set();
+    let pendingLiffAction = getLiffLaunchAction();
+    let handledLiffAction = false;
 
     document.addEventListener('DOMContentLoaded', () => {
       renderServices();
@@ -445,6 +447,7 @@
         await loadCustomerProfile();
         updateLineStatus();
         updateQueryIdentityUI();
+        await handlePendingLiffAction();
       } catch (error) {
         console.error('LIFF 初始化失敗', error);
         updateLineStatus('LINE 身份讀取失敗，可改用姓名與手機查詢');
@@ -508,6 +511,62 @@
       } else {
         contactFields.classList.remove('hidden');
         savedContactNote.classList.add('hidden');
+      }
+    }
+
+    function getLiffLaunchAction() {
+      const searchParams = new URLSearchParams(window.location.search);
+      const directAction = readLaunchActionParams(searchParams);
+
+      if (directAction.action && directAction.bookingId) {
+        return directAction;
+      }
+
+      const liffState = searchParams.get('liff.state');
+
+      if (!liffState) {
+        return { action: '', bookingId: '' };
+      }
+
+      try {
+        const stateUrl = new URL(liffState, window.location.origin);
+        return readLaunchActionParams(stateUrl.searchParams);
+      } catch (error) {
+        console.error('LIFF 入口參數解析失敗', error);
+        return { action: '', bookingId: '' };
+      }
+    }
+
+    function readLaunchActionParams(params) {
+      const action = String(params.get('action') || '').trim().toLowerCase();
+      const bookingId = String(params.get('bookingId') || '').trim();
+
+      if (!['keep', 'cancel'].includes(action)) {
+        return { action: '', bookingId: '' };
+      }
+
+      return { action, bookingId };
+    }
+
+    async function handlePendingLiffAction() {
+      if (handledLiffAction || !pendingLiffAction.action || !pendingLiffAction.bookingId) return;
+
+      handledLiffAction = true;
+      showQueryFlow();
+      const bookings = await queryMyBookings();
+      const booking = (bookings || lastQueryResults).find(item => String(item.bookingId || '') === pendingLiffAction.bookingId);
+
+      if (!booking) {
+        showToast('找不到這筆預約，請從查詢結果確認', 'error');
+        return;
+      }
+
+      if (pendingLiffAction.action === 'keep') {
+        await keepBooking(pendingLiffAction.bookingId);
+      }
+
+      if (pendingLiffAction.action === 'cancel') {
+        await cancelBooking(pendingLiffAction.bookingId);
       }
     }
 
@@ -596,7 +655,7 @@
         days.push({
           dayOfWeek: dayNames[d.getDay()],
           dayOfMonth: d.getDate(),
-          fullDate: d.toISOString().split('T')[0],
+          fullDate: getLocalDateString(i),
           month: d.getMonth() + 1
         });
       }
@@ -847,9 +906,11 @@
         }
 
         renderQueryResults(bookings);
+        return bookings;
       } catch (error) {
         console.error(error);
         showToast('查詢失敗，請稍後再試');
+        return [];
       } finally {
         queryBtn.disabled = false;
         queryBtn.classList.remove('opacity-75', 'cursor-wait');
@@ -908,6 +969,52 @@
       }
     }
 
+    async function keepBooking(bookingId) {
+      const booking = lastQueryResults.find(item => String(item.bookingId || '') === String(bookingId || ''));
+
+      if (!booking) {
+        return showToast('找不到這筆預約資料');
+      }
+
+      if ((booking.status || '已預約') === '已取消') {
+        return showToast('這筆預約已經取消，無法保留');
+      }
+
+      try {
+        if (!SCRIPT_URL) {
+          booking.reminderResponseAction = '保留預約';
+          showToast('已保留這筆預約', 'success');
+          renderQueryResults(lastQueryResults);
+          return;
+        }
+
+        const response = await fetch(SCRIPT_URL, {
+          method: 'POST',
+          body: JSON.stringify({
+            action: 'keepBooking',
+            bookingId: bookingId,
+            lineUserId: lineProfile.lineUserId,
+            name: booking.name || document.getElementById('query-name').value.trim(),
+            phone: booking.phone || document.getElementById('query-phone').value.trim()
+          }),
+          headers: {
+            'Content-Type': 'text/plain;charset=utf-8'
+          }
+        });
+
+        const data = await response.json();
+        if (!data.ok) {
+          return showToast(data.message || '保留預約失敗');
+        }
+
+        showToast('已保留這筆預約', 'success');
+        await queryMyBookings();
+      } catch (error) {
+        console.error(error);
+        showToast('保留預約失敗，請稍後再試');
+      }
+    }
+
     function renderQueryResults(bookings) {
       const result = document.getElementById('query-result');
       lastQueryResults = bookings;
@@ -924,6 +1031,7 @@
       result.innerHTML = bookings.map(booking => {
         const status = booking.status || '已預約';
         const isCanceled = status === '已取消';
+        const showReminderActions = !isCanceled && isTomorrowBooking(booking.date);
         const bookingId = safeBookingId(booking.bookingId);
         const cardClass = isCanceled
           ? 'border-stone-200 bg-stone-50'
@@ -931,10 +1039,21 @@
         const statusClass = isCanceled
           ? 'bg-white text-stone-500 border-stone-200'
           : 'bg-white text-emerald-700 border-emerald-200';
+        const keepButton = showReminderActions ? `
+          <button onclick="keepBooking('${bookingId}')" class="w-full sm:w-auto bg-emerald-700 text-white hover:bg-emerald-800 font-semibold py-2.5 px-5 rounded-xl transition-all duration-300">
+            保留預約
+          </button>
+        ` : '';
         const cancelButton = isCanceled ? '' : `
-          <button onclick="cancelBooking('${bookingId}')" class="mt-4 w-full sm:w-auto bg-white border-2 border-rose-200 text-rose-600 hover:bg-rose-50 font-semibold py-2.5 px-5 rounded-xl transition-all duration-300">
+          <button onclick="cancelBooking('${bookingId}')" class="w-full sm:w-auto bg-white border-2 border-rose-200 text-rose-600 hover:bg-rose-50 font-semibold py-2.5 px-5 rounded-xl transition-all duration-300">
             取消預約
           </button>
+        `;
+        const actionButtons = isCanceled ? '' : `
+          <div class="mt-4 flex flex-col sm:flex-row gap-2">
+            ${keepButton}
+            ${cancelButton}
+          </div>
         `;
 
         return `
@@ -952,12 +1071,26 @@
           <div class="text-sm text-stone-600 space-y-1">
             <p><span class="text-stone-400">精油偏好：</span>${booking.preferredOil || '未填寫'}</p>
             <p><span class="text-stone-400">備註：</span>${booking.notes || '無'}</p>
+            ${booking.reminderResponseAction ? `<p><span class="text-stone-400">提醒回覆：</span>${booking.reminderResponseAction}</p>` : ''}
             ${isCanceled ? `<p><span class="text-stone-400">取消時間：</span>${booking.canceledAt || '已取消'}</p>` : ''}
           </div>
-          ${cancelButton}
+          ${actionButtons}
         </div>
         `;
       }).join('');
+    }
+
+    function isTomorrowBooking(dateString) {
+      return String(dateString || '').slice(0, 10) === getLocalDateString(1);
+    }
+
+    function getLocalDateString(offsetDays = 0) {
+      const date = new Date();
+      date.setDate(date.getDate() + offsetDays);
+      const year = date.getFullYear();
+      const month = String(date.getMonth() + 1).padStart(2, '0');
+      const day = String(date.getDate()).padStart(2, '0');
+      return `${year}-${month}-${day}`;
     }
 
     function safeBookingId(value) {
@@ -1155,4 +1288,5 @@
   </script>
 </body>
 </html>
+
 
